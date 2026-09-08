@@ -1,0 +1,8 @@
+.venv/
+.uv-cache/
+.dvc-global/
+.dvc-site-cache/
+__pycache__/
+*.py[cod]
+
+/data
