@@ -4,5 +4,7 @@
 .dvc-site-cache/
 __pycache__/
 *.py[cod]
+mlflow.db
+mlruns/
 
 /data
