@@ -1,4 +1,4 @@
-# Lab 2 Answers: Training and MLflow
+# Lab 2 Answers: Model Training and MLflow
 
 ## Q1. What changed in `pyproject.toml` and `uv.lock`?
 

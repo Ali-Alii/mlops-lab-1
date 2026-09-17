@@ -1,4 +1,4 @@
-# MLOps Lab Answers
+# Lab 1 Answers: uv, DVC, and DagsHub
 
 ## Q1. What does `uv init` do?
 
