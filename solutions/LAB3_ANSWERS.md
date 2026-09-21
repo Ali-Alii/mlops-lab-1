@@ -42,13 +42,14 @@ remains cached.
 
 ## Q5. Image size and layers
 
-The completed CPU-only multi-stage image is approximately **595 MB**. Its
-largest content is the Python environment (MLflow, CPU PyTorch, torchvision,
-and dependencies), followed by the roughly 45 MB model. A naive single-stage
-build would additionally retain `uv`, download caches, and build-only files.
-`docker history food11-api:latest` shows the virtual-environment copy as the
-largest application layer. Multi-stage construction keeps builder contents out
-of the runtime image.
+Docker Desktop reports approximately **2.63 GB unpacked** for the completed
+CPU-only image (the compressed image data is much smaller). Its largest content
+is the Python environment—MLflow, CPU PyTorch, torchvision, and their
+dependencies—followed by the roughly 45 MB model. A naive single-stage build
+would additionally retain `uv`, download caches, and build-only files. `docker
+history food11-api:latest` shows the virtual-environment copy as the largest
+application layer. Multi-stage construction keeps builder contents out of the
+runtime image.
 
 ## Q6. Why `.dockerignore` matters
 
