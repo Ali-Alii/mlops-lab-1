@@ -135,7 +135,7 @@ def upload_page() -> str:
 <body><main>
   <h1>Food-11 Champion</h1>
   <p>Upload a food image to classify it with the best MLflow model.</p>
-  <form id="form">
+  <form id="form" method="post" action="/predict" enctype="multipart/form-data">
     <label for="file">Choose or drop a JPG/PNG image<input id="file" name="file" type="file" accept="image/*" required></label>
     <img id="preview" alt="Selected food image">
     <button id="submit" type="submit">Predict category</button>
@@ -153,4 +153,3 @@ form.onsubmit=async(e)=>{ e.preventDefault(); const button=document.querySelecto
   } catch(error) { result.textContent=`Error: ${error.message}`; } finally { button.disabled=false; }
 };
 </script></main></body></html>"""
-
