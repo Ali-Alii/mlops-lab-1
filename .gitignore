@@ -6,5 +6,6 @@ __pycache__/
 *.py[cod]
 mlflow.db
 mlruns/
+deployment/champion-model/
 
 /data

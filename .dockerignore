@@ -1,0 +1,14 @@
+.git
+.gitignore
+.dvc
+.dvcignore
+.uv-cache
+.venv
+.vscode
+data
+mlflow.db
+mlruns
+__pycache__
+*.py[cod]
+solutions
+lab3-docker.md
