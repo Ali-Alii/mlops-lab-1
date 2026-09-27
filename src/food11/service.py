@@ -42,6 +42,13 @@ def load_champion():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.model = load_champion()
+    if MODEL_URI.startswith("models:/") and "@" in MODEL_URI:
+        model_name, alias = MODEL_URI.removeprefix("models:/").split("@", 1)
+        app.state.model_version = mlflow.MlflowClient().get_model_version_by_alias(
+            model_name, alias
+        ).version
+    else:
+        app.state.model_version = "bundled"
     yield
 
 
@@ -81,7 +88,11 @@ def probabilities_from_prediction(prediction: object) -> np.ndarray:
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "model_uri": MODEL_URI}
+    return {
+        "status": "ok",
+        "model_uri": MODEL_URI,
+        "model_version": app.state.model_version,
+    }
 
 
 @app.post("/predict")
@@ -106,6 +117,7 @@ async def predict(file: UploadFile = File(...)) -> dict[str, object]:
             for index in order
         ],
         "model_uri": MODEL_URI,
+        "model_version": app.state.model_version,
     }
 
 

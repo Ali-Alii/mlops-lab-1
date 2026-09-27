@@ -7,6 +7,25 @@ This project uses [uv](https://docs.astral.sh/uv/) for its Python environment an
 uv run python ./src/food11/data.py
 ```
 
+## Lab 4: run the complete application
+
+The Lab 4 stack runs MLflow, the inference API, and a Streamlit upload page
+inside Docker Compose. First make sure the Lab 3 champion has been exported to
+`deployment/champion-model/` (see [deployment/README.md](deployment/README.md)).
+Then run:
+
+```powershell
+docker compose up -d --build
+docker compose ps
+```
+
+Open the [upload page](http://127.0.0.1:8501) and the
+[MLflow UI](http://127.0.0.1:5000). The first start seeds an empty Compose
+registry from the bundled champion. MLflow data is stored in the named volume
+`food11-lab4_mlflow-data`; `docker compose down` keeps it. See
+[Lab 4 answers](labs/lab4.md) for the architecture, version-switch test, and
+the effect of `down -v`.
+
 ## Lab answers
 
 1. `uv init` creates `pyproject.toml` (project metadata and dependencies),
