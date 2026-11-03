@@ -41,11 +41,13 @@ red test check.
 
 ## Q6. Run duration and cache comparison
 
-The GitHub Actions workflow must be observed in the repository's Actions tab
-to give actual first/second-run times. The UV cache is expected to speed up
-dependency setup on a repeat run; Docker's `type=gha` cache is used by the
-image publishing job. We did not create an empty commit only to manufacture
-a second timing result.
+The first [GitHub Actions run](https://github.com/Ali-Alii/mlops-lab-1/actions/runs/41634047511)
+passed in about **5 minutes 30 seconds**. Its `test` job took 18 seconds,
+`smoke` took 66 seconds, and image publishing took the remaining time. The
+documentation update containing this measurement triggers a second run for a
+cache comparison. UV caches dependencies for the test job, while the image
+publishing job uses GitHub Actions' BuildKit cache. The smoke job uses a plain
+`docker build` on a fresh runner and does not share that cache.
 
 ## Q7. Why tag the image with the commit SHA?
 
