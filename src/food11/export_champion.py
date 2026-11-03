@@ -13,7 +13,9 @@ import mlflow
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-uri", default="models:/food11@champion")
-    parser.add_argument("--output", type=Path, default=Path("deployment/champion-model"))
+    parser.add_argument(
+        "--output", type=Path, default=Path("deployment/champion-model")
+    )
     parser.add_argument(
         "--tracking-uri",
         default=os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"),
@@ -31,4 +33,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

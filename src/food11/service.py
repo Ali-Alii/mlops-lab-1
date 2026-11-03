@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import io
 import os
-from html import escape
 from contextlib import asynccontextmanager
+from html import escape
 
-import mlflow
 import mlflow.pyfunc
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+import mlflow
 
 CLASSES = (
     "Bread",
@@ -32,6 +32,7 @@ IMAGE_SIZE = (128, 128)
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
 MODEL_URI = os.getenv("MLFLOW_MODEL_URI", "models:/food11@champion")
+model = None
 
 
 def load_champion():
@@ -41,15 +42,27 @@ def load_champion():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.model = load_champion()
-    if MODEL_URI.startswith("models:/") and "@" in MODEL_URI:
-        model_name, alias = MODEL_URI.removeprefix("models:/").split("@", 1)
-        app.state.model_version = mlflow.MlflowClient().get_model_version_by_alias(
-            model_name, alias
-        ).version
+    global model
+    if os.getenv("SKIP_MODEL"):
+        model = None
+        app.state.model_version = "skipped"
     else:
+        model = load_champion()
+    if (
+        not os.getenv("SKIP_MODEL")
+        and MODEL_URI.startswith("models:/")
+        and "@" in MODEL_URI
+    ):
+        model_name, alias = MODEL_URI.removeprefix("models:/").split("@", 1)
+        app.state.model_version = (
+            mlflow.MlflowClient().get_model_version_by_alias(model_name, alias).version
+        )
+    elif not os.getenv("SKIP_MODEL"):
         app.state.model_version = "bundled"
-    yield
+    try:
+        yield
+    finally:
+        model = None
 
 
 app = FastAPI(
@@ -67,7 +80,9 @@ def preprocess_image(raw: bytes) -> np.ndarray:
                 source.convert("RGB"), IMAGE_SIZE, method=Image.Resampling.LANCZOS
             )
     except (UnidentifiedImageError, OSError) as exc:
-        raise HTTPException(status_code=400, detail="The uploaded file is not a valid image") from exc
+        raise HTTPException(
+            status_code=400, detail="The uploaded file is not a valid image"
+        ) from exc
 
     array = np.asarray(image, dtype=np.float32) / 255.0
     mean = np.asarray((0.485, 0.456, 0.406), dtype=np.float32)
@@ -77,10 +92,16 @@ def preprocess_image(raw: bytes) -> np.ndarray:
 
 
 def probabilities_from_prediction(prediction: object) -> np.ndarray:
-    values = prediction.detach().cpu().numpy() if hasattr(prediction, "detach") else np.asarray(prediction)
+    values = (
+        prediction.detach().cpu().numpy()
+        if hasattr(prediction, "detach")
+        else np.asarray(prediction)
+    )
     logits = np.asarray(values, dtype=np.float64).reshape(-1)
     if logits.size != len(CLASSES):
-        raise RuntimeError(f"Expected {len(CLASSES)} model outputs, received {logits.size}")
+        raise RuntimeError(
+            f"Expected {len(CLASSES)} model outputs, received {logits.size}"
+        )
     shifted = logits - logits.max()
     probabilities = np.exp(shifted)
     return probabilities / probabilities.sum()
@@ -106,14 +127,19 @@ async def predict(file: UploadFile = File(...)) -> dict[str, object]:
         raise HTTPException(status_code=413, detail="Image exceeds the 10 MB limit")
 
     model_input = preprocess_image(raw)
-    prediction = app.state.model.predict(model_input)
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model is not loaded")
+    prediction = model.predict(model_input)
     probabilities = probabilities_from_prediction(prediction)
     order = np.argsort(probabilities)[::-1][:3]
     return {
         "predicted_category": CLASSES[int(order[0])],
         "confidence": round(float(probabilities[order[0]]), 6),
         "top_predictions": [
-            {"category": CLASSES[int(index)], "confidence": round(float(probabilities[index]), 6)}
+            {
+                "category": CLASSES[int(index)],
+                "confidence": round(float(probabilities[index]), 6),
+            }
             for index in order
         ],
         "model_uri": MODEL_URI,

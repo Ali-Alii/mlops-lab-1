@@ -13,7 +13,6 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
-
 CATEGORIES = (
     "Bread",
     "Dairy product",
@@ -27,18 +26,29 @@ CATEGORIES = (
     "Soup",
     "Vegetable-Fruit",
 )
+CLASSES = CATEGORIES
 SPLITS = ("training", "evaluation", "validation")
 IMAGE_SIZE = (128, 128)
 MINI_LIMIT = 100
 
 
-def category_from_filename(path: Path) -> str:
+def category_from_filename(path: str | Path) -> str:
     """Return a class name from Food-11's ``<class>_<number>.jpg`` name."""
+    path = Path(path)
     try:
         class_id = int(path.stem.split("_", maxsplit=1)[0])
+        if not 0 <= class_id < len(CLASSES):
+            raise ValueError("Class index is out of range")
         return CATEGORIES[class_id]
     except (ValueError, IndexError) as exc:
         raise ValueError(f"Unexpected Food-11 filename: {path.name}") from exc
+
+
+def resize_image(img: Image.Image, size: int = 128) -> Image.Image:
+    """Return a square RGB image, preserving the center crop."""
+    return ImageOps.fit(
+        img.convert("RGB"), (size, size), method=Image.Resampling.LANCZOS
+    )
 
 
 def prepare_dataset(raw_dir: Path, output_dir: Path, mini_dir: Path) -> None:
@@ -66,9 +76,7 @@ def prepare_dataset(raw_dir: Path, output_dir: Path, mini_dir: Path) -> None:
             destination.parent.mkdir(parents=True, exist_ok=True)
 
             with Image.open(source) as image:
-                image = ImageOps.fit(
-                    image.convert("RGB"), IMAGE_SIZE, method=Image.Resampling.LANCZOS
-                )
+                image = resize_image(image, IMAGE_SIZE[0])
                 image.save(destination, format="JPEG", quality=90, optimize=True)
 
             key = (split, category)
@@ -79,16 +87,16 @@ def prepare_dataset(raw_dir: Path, output_dir: Path, mini_dir: Path) -> None:
             counts[key] += 1
 
     print(f"Prepared {sum(counts.values())} images in {output_dir}")
-    print(f"Prepared {sum(min(count, MINI_LIMIT) for count in counts.values())} images in {mini_dir}")
+    print(
+        f"Prepared {sum(min(count, MINI_LIMIT) for count in counts.values())} images in {mini_dir}"
+    )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw", type=Path, default=Path("data/food11_raw"))
     parser.add_argument("--output", type=Path, default=Path("data/food11_processed"))
-    parser.add_argument(
-        "--mini", type=Path, default=Path("data/food11_processed_mini")
-    )
+    parser.add_argument("--mini", type=Path, default=Path("data/food11_processed_mini"))
     return parser.parse_args()
 
 

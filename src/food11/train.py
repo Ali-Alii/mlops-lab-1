@@ -7,7 +7,6 @@ import random
 import sys
 from pathlib import Path
 
-import mlflow
 import mlflow.pytorch
 import numpy as np
 import torch
@@ -15,6 +14,12 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets, models, transforms
 
+try:
+    from .validate_data import validate_dataset
+except ImportError:  # Direct script execution from the repo root.
+    from validate_data import validate_dataset
+
+import mlflow
 
 DATASETS = {
     "processed": Path("data/food11_processed"),
@@ -48,13 +53,13 @@ def seed_everything(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def make_loaders(root: Path, batch_size: int) -> tuple[dict[str, DataLoader], list[str]]:
+def make_loaders(
+    root: Path, batch_size: int
+) -> tuple[dict[str, DataLoader], list[str]]:
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
-            transforms.Normalize(
-                mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)
-            ),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
         ]
     )
     image_sets = {
@@ -129,6 +134,8 @@ def main() -> None:
 
     seed_everything(args.seed)
     data_root = DATASETS[args.dataset]
+    if not validate_dataset(data_root):
+        raise SystemExit("Dataset validation failed; training was not started")
     loaders, classes = make_loaders(data_root, args.batch_size)
     if len(classes) != 11:
         raise ValueError(f"Expected 11 classes, found {len(classes)}: {classes}")
@@ -180,9 +187,7 @@ def main() -> None:
                 flush=True,
             )
 
-        test_loss, test_accuracy = run_epoch(
-            model, loaders["test"], loss_fn, device
-        )
+        test_loss, test_accuracy = run_epoch(model, loaders["test"], loss_fn, device)
         mlflow.log_metrics(
             {"test_loss": test_loss, "test_accuracy": test_accuracy},
             step=args.epochs - 1,

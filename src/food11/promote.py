@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
+
+from mlflow.entities import RunStatus
+from mlflow.exceptions import MlflowException
 
 import mlflow
 from mlflow import MlflowClient
-from mlflow.entities import RunStatus
-from mlflow.exceptions import MlflowException
 
 
 def parse_args() -> argparse.Namespace:
@@ -18,10 +20,60 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-name", default="food11")
     parser.add_argument("--alias", default="champion")
     parser.add_argument(
+        "--version", help="Candidate model version for the quality gate"
+    )
+    parser.add_argument("--test-size", type=int, help="Number of evaluation images")
+    parser.add_argument(
         "--tracking-uri",
         default=os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"),
     )
     return parser.parse_args()
+
+
+def gate_candidate(
+    client: MlflowClient, model_name: str, version: str, test_size: int
+) -> dict[str, float | str]:
+    """Promote only when candidate accuracy clears two standard errors."""
+    if test_size <= 0:
+        raise ValueError("test-size must be positive")
+    candidate = client.get_model_version(model_name, version)
+    champion = client.get_model_version_by_alias(model_name, "champion")
+    if not candidate.run_id or not champion.run_id:
+        raise ValueError("Both versions must be linked to training runs")
+    candidate_metrics = client.get_run(candidate.run_id).data.metrics
+    champion_metrics = client.get_run(champion.run_id).data.metrics
+    if (
+        "test_accuracy" not in candidate_metrics
+        or "test_accuracy" not in champion_metrics
+    ):
+        raise ValueError("Both runs must log test_accuracy")
+    candidate_accuracy = candidate_metrics["test_accuracy"]
+    champion_accuracy = champion_metrics["test_accuracy"]
+    if not all(
+        math.isfinite(value) and 0 <= value <= 1
+        for value in (candidate_accuracy, champion_accuracy)
+    ):
+        raise ValueError("Accuracies must be finite fractions between 0 and 1")
+    standard_error = math.sqrt(champion_accuracy * (1 - champion_accuracy) / test_size)
+    threshold = champion_accuracy + 2 * standard_error
+    decision = "champion" if candidate_accuracy >= threshold else "challenger"
+    client.set_registered_model_alias(model_name, decision, version)
+    for key, value in {
+        "gate_decision": decision,
+        "gate_candidate_accuracy": candidate_accuracy,
+        "gate_champion_accuracy": champion_accuracy,
+        "gate_test_size": test_size,
+        "gate_two_se": 2 * standard_error,
+        "gate_threshold": threshold,
+    }.items():
+        client.set_model_version_tag(model_name, version, key, str(value))
+    return {
+        "decision": decision,
+        "candidate_accuracy": candidate_accuracy,
+        "champion_accuracy": champion_accuracy,
+        "two_se": 2 * standard_error,
+        "threshold": threshold,
+    }
 
 
 def promote_best_model(args: argparse.Namespace) -> tuple[str, str, str, float]:
@@ -86,7 +138,9 @@ def promote_best_model(args: argparse.Namespace) -> tuple[str, str, str, float]:
         )
     client.set_registered_model_alias(args.model_name, args.alias, version.version)
     client.set_registered_model_tag(args.model_name, "selection_metric", args.metric)
-    client.set_registered_model_tag(args.model_name, "champion_version", version.version)
+    client.set_registered_model_tag(
+        args.model_name, "champion_version", version.version
+    )
     client.set_logged_model_tags(
         logged_model.model_id,
         {
@@ -101,6 +155,16 @@ def promote_best_model(args: argparse.Namespace) -> tuple[str, str, str, float]:
 
 def main() -> None:
     args = parse_args()
+    if args.version is not None:
+        if args.test_size is None:
+            raise SystemExit("--test-size is required with --version")
+        mlflow.set_tracking_uri(args.tracking_uri)
+        result = gate_candidate(
+            MlflowClient(), args.model_name, args.version, args.test_size
+        )
+        for key, value in result.items():
+            print(f"{key}={value}")
+        return
     version, model_id, run_id, score = promote_best_model(args)
     print(f"registered_model={args.model_name}")
     print(f"version={version}")

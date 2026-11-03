@@ -7,14 +7,14 @@ import os
 import time
 from pathlib import Path
 
-import mlflow
-from mlflow import MlflowClient
 from mlflow.exceptions import MlflowException
 
+import mlflow
+from mlflow import MlflowClient
 
 MODEL_NAME = "food11"
 ALIAS = "champion"
-MODEL_PATH = Path("/app/model")
+MODEL_PATH = Path("/app/deployment/champion-model")
 
 
 def wait_for_tracking_server(client: MlflowClient) -> None:
@@ -68,7 +68,10 @@ def main() -> None:
     if not args.new_version:
         try:
             current = client.get_model_version_by_alias(MODEL_NAME, ALIAS)
-            print(f"Using existing {MODEL_NAME}@{ALIAS} version {current.version}", flush=True)
+            print(
+                f"Using existing {MODEL_NAME}@{ALIAS} version {current.version}",
+                flush=True,
+            )
             return
         except MlflowException:
             versions = client.search_model_versions(f"name='{MODEL_NAME}'")
